@@ -68,3 +68,26 @@ def test_detalle_describe_el_tipo_pero_nunca_el_valor():
     assert "token de GitHub" in hallazgos
     assert all("hunter2" not in h and "aaaa" not in h for h in hallazgos)
     assert "hunter2" not in limpio
+
+
+def test_opciones_y_esquemas_no_se_cuentan_como_secretos():
+    # Líneas reales de un log de GitHub Actions que antes daban falsos positivos
+    for linea in (
+        "  persist-credentials: true",
+        "  output-env-credentials: false",
+        "http.https://github.com/.extraheader AUTHORIZATION: basic ***",
+        "Authorization: Bearer ***",
+    ):
+        limpio, n = redactar_contando(linea)
+        assert n == 0 and limpio == linea, linea
+
+
+def test_los_secretos_reales_siguen_ocultos():
+    for linea, secreto in (
+        ("password: hunter2", "hunter2"),
+        ("api_key=abc123xyz", "abc123xyz"),
+        ("Authorization: Bearer abcdefghijklmnop", "abcdefghijklmnop"),
+        ("secret: 'valor-real'", "valor-real"),
+    ):
+        limpio, n = redactar_contando(linea)
+        assert n >= 1 and secreto not in limpio, linea

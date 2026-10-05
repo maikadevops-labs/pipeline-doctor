@@ -28,6 +28,8 @@ _TOKENS = [
     re.compile(r"\beyJ[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}"),  # JWT
 ]
 
+_NO_SON_SECRETOS = {"true", "false", "yes", "no", "on", "off", "null", "none", "basic", "bearer", "token"}
+
 _URL_CON_CREDENCIALES = re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@")
 _BEARER = re.compile(r"\b([Bb]earer|[Bb]asic)\s+[A-Za-z0-9._~+/=-]{8,}")
 _ASIGNACION = re.compile(
@@ -82,7 +84,10 @@ def redactar_detalle(texto: str) -> Tuple[str, List[str]]:
 
     def asignacion(m):
         valor = m.group(3).strip("\"'")
-        if valor in (REDACTADO, "***", ""):
+        if valor in (REDACTADO, "") or valor.startswith("***"):
+            return m.group(0)
+        # Opciones y palabras de esquema, no secretos: `persist-credentials: true`, `Authorization: basic ***`.
+        if valor.lower() in _NO_SON_SECRETOS:
             return m.group(0)
         hallazgos.append(f"valor de la variable '{m.group(1)[:40]}'")
         return f"{m.group(1)}{m.group(2)}{REDACTADO}"
