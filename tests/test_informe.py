@@ -72,7 +72,7 @@ def test_informe_con_error_de_ia_lo_avisa():
 def test_sin_verde_explica_que_no_puede_comparar():
     ctx = ctx_base(verde=None, diff=None, codigo=None)
     md = informe.construir(ctx)
-    assert "todavía no hay un run verde" in md
+    assert "Todavía no hay un run verde" in md
 
 
 def test_sin_huella_sugiere_el_paso_huella():
@@ -84,7 +84,7 @@ def test_codigo_cambiado_lista_archivos():
     ctx = ctx_base(codigo={"identico": False, "archivos": ["a.py", "b.py"]}, diff=comparar(hue("1", "a"), hue("1", "a")))
     md = informe.construir(ctx)
     assert "cambiaron 2 archivo(s)" in md and "`a.py`" in md
-    assert "no encontré diferencias" in md
+    assert "No encontré diferencias" in md
 
 
 def test_tabla_se_recorta():
@@ -98,3 +98,20 @@ def test_tabla_se_recorta():
 
 def test_envolver_incluye_el_marcador():
     assert informe.envolver(["a", "b"]).startswith(informe.MARCADOR)
+
+
+def test_texto_plano_para_el_log():
+    md = informe.envolver([informe.construir(ctx_base())])
+    plano = informe.texto_plano(md)
+    assert "**" not in plano and "`" not in plano and "<sub>" not in plano
+    assert informe.MARCADOR not in plano
+    assert "QUÉ CAMBIÓ EN EL ENTORNO" in plano
+    # la tabla queda alineada y sin la fila separadora de Markdown
+    assert "|---" not in plano
+    fila = next(l for l in plano.splitlines() if l.strip().startswith("Dependencia fechautil"))
+    assert "1.0.0" in fila and "1.1.0" in fila
+
+
+def test_linea_de_error_va_en_bloque_de_codigo():
+    md = informe.construir(ctx_base(linea_error="E   AttributeError: ``` raro"))
+    assert md.count("```") == 2  # el bloque se abre y se cierra una sola vez

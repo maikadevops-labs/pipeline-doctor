@@ -89,6 +89,11 @@ def frase_codigo(codigo: Optional[dict], verde_n, actual_n) -> str:
 # --- informe de un job -------------------------------------------------------------------
 
 
+def _bloque(texto: str) -> str:
+    """Bloque de código para una línea del log (sin permitir que cierre el bloque)."""
+    return "```text\n" + texto.replace("```", "'''") + "\n```"
+
+
 def construir(ctx: dict, analisis: Optional[dict] = None) -> str:
     """ctx: datos del run/job. analisis: respuesta (ya parseada) del modelo, si hubo."""
     sospechosos: List[dict] = ctx["sospechosos"]
@@ -97,39 +102,44 @@ def construir(ctx: dict, analisis: Optional[dict] = None) -> str:
     run_n = ctx.get("run_number") or ctx.get("run_id")
     analisis = analisis or {}
 
-    # Cada elemento es un párrafo: así se ve igual en un comentario de PR y en el resumen del job.
-    lineas = [f"### 🩺 Pipeline Doctor: consulta del run #{run_n}"]
+    # Cada elemento es un bloque: así se ve igual en un comentario de PR y en el resumen del job.
+    titulo = f"### 🩺 Pipeline Doctor: consulta del run #{run_n}"
     if ctx.get("run_url"):
-        lineas[0] += f" ([ver run]({ctx['run_url']}))"
+        titulo += f" ([ver run]({ctx['run_url']}))"
+    bloques = [titulo]
 
     # Síntomas
     paso = ctx.get("paso")
-    donde = f"el job `{ctx['job']}` falló" + (f" en el paso *{paso}*" if paso else "")
-    sintoma = texto_ia(analisis.get("sintomas")) or (
-        f"`{ctx['linea_error']}`" if ctx.get("linea_error") else ""
-    )
-    lineas.append(f"**Síntomas:** {donde}." + (f" {sintoma}" if sintoma else ""))
+    donde = f"El job `{ctx['job']}` falló" + (f" en el paso *{paso}*." if paso else ".")
+    sintoma_ia = texto_ia(analisis.get("sintomas"))
+    bloques += ["#### 🔍 Síntomas", donde + (f" {sintoma_ia}" if sintoma_ia else "")]
+    if not sintoma_ia and ctx.get("linea_error"):
+        bloques.append(_bloque(ctx["linea_error"]))
 
     # Historial
+    bloques.append("#### 📜 Historial")
     if verde:
         verde_n = verde.get("run_number") or verde.get("run_id")
-        lineas.append(
-            f"**Historial:** último run verde: #{verde_n} ({hace(verde.get('timestamp'))}). "
+        bloques.append(
+            f"Último run verde: #{verde_n} ({hace(verde.get('timestamp'))}). "
             + frase_codigo(ctx.get("codigo"), verde_n, run_n)
         )
         diff = ctx.get("diff")
         if diff and hay_cambios(diff):
-            lineas += ["**Qué cambió en el entorno:**", tabla_cambios(diff, verde_n, run_n)]
+            bloques += ["#### 🧬 Qué cambió en el entorno", tabla_cambios(diff, verde_n, run_n)]
         elif diff is not None:
-            lineas.append("**Entorno:** no encontré diferencias entre ambos runs (mismo runner, herramientas y dependencias).")
+            bloques.append(
+                "No encontré diferencias entre ambos runs en el entorno "
+                "(mismo runner, herramientas y dependencias)."
+            )
     elif ctx.get("huella_actual"):
-        lineas.append(
-            "**Historial:** todavía no hay un run verde guardado en la rama base, "
+        bloques.append(
+            "Todavía no hay un run verde guardado en la rama base, "
             "así que no puedo comparar. Cuando este job pase en esa rama, guardaré la referencia."
         )
     else:
-        lineas.append(
-            "**Historial:** este job no guardó su huella, así que no puedo comparar "
+        bloques.append(
+            "Este job no guardó su huella, así que no puedo comparar "
             "(¿falta el paso `huella` con `if: always()`?)."
         )
 
@@ -137,20 +147,23 @@ def construir(ctx: dict, analisis: Optional[dict] = None) -> str:
     diagnostico = texto_ia(analisis.get("diagnostico"))
     if not diagnostico:
         diagnostico = f"{principal['titulo']}. {principal['evidencia']}"
+    bloques += ["#### 🩺 Diagnóstico", diagnostico]
     descartado = [texto_ia(d, 200) for d in (analisis.get("descartado") or []) if d][:5]
     if descartado:
-        diagnostico += " **Descartado:** " + "; ".join(descartado) + "."
-    lineas.append(f"**Diagnóstico:** {diagnostico}")
+        bloques.append("**Descartado:** " + "; ".join(descartado) + ".")
 
     # Tratamiento y validación
-    lineas.append(f"**Tratamiento:** {texto_ia(analisis.get('tratamiento')) or principal['tratamiento']}")
-    lineas.append(f"**Validación:** {texto_ia(analisis.get('validacion')) or principal['validacion']}")
+    bloques += [
+        "#### 💊 Tratamiento",
+        texto_ia(analisis.get("tratamiento")) or principal["tratamiento"],
+        "#### ✅ Validación",
+        texto_ia(analisis.get("validacion")) or principal["validacion"],
+    ]
 
     confianza = str(analisis.get("confianza", "")).lower()
     if confianza not in CONFIANZAS:
         confianza = principal["nivel"]
-    pie = f"**Confianza:** {confianza} · *Pipeline Doctor propone, tú decides.*"
-    lineas.append(pie)
+    bloques += ["---", f"**Confianza:** {confianza} · *Pipeline Doctor propone, tú decides.*"]
 
     notas = []
     if not ctx.get("modelo"):
@@ -163,8 +176,64 @@ def construir(ctx: dict, analisis: Optional[dict] = None) -> str:
     if ctx.get("modelo") and ctx.get("redacciones"):
         notas.append(f"Se ocultaron {ctx['redacciones']} posible(s) secreto(s) del log antes del análisis.")
     if notas:
-        lineas.append("<sub>" + " ".join(notas) + "</sub>")
-    return "\n\n".join(lineas)
+        bloques.append("<sub>" + " ".join(notas) + "</sub>")
+    return "\n\n".join(bloques)
+
+
+# --- versión en texto plano para el log del job (el Markdown se ve feo ahí) ---------------
+
+_TABLA_SEP = re.compile(r"^\|\s*:?-{3,}")
+_ENLACE_MD = re.compile(r"!?\[([^\]]*)\]\(([^)]*)\)")
+_CURSIVA = re.compile(r"(?<![\w*])\*([^*\n]+)\*(?![\w*])")
+
+
+def texto_plano(md: str) -> str:
+    """Convierte el informe a texto legible en una terminal: sin **, sin backticks, con tablas alineadas."""
+    salida: List[str] = []
+    tabla: List[List[str]] = []
+    en_codigo = False
+
+    def volcar():
+        if not tabla:
+            return
+        ancho = [max(len(f[c]) for f in tabla) for c in range(len(tabla[0]))]
+        for n, fila in enumerate(tabla):
+            salida.append("  " + "   ".join(celda.ljust(ancho[c]) for c, celda in enumerate(fila)).rstrip())
+            if n == 0:
+                salida.append("  " + "   ".join("─" * a for a in ancho))
+        tabla.clear()
+
+    for linea in md.splitlines():
+        if linea.strip() == MARCADOR:
+            continue
+        if linea.startswith("```"):
+            en_codigo = not en_codigo
+            continue
+        if en_codigo:
+            salida.append("    " + linea)
+            continue
+        if linea.startswith("|"):
+            if _TABLA_SEP.match(linea):
+                continue
+            celdas = [c.strip().replace("\\|", "|").replace("`", "") for c in linea.strip().strip("|").split("|")]
+            tabla.append(celdas)
+            continue
+        volcar()
+        if linea.strip() == "---":
+            salida.append("─" * 60)
+            continue
+        linea = _ENLACE_MD.sub(r"\1: \2", linea)
+        linea = re.sub(r"</?sub>", "", linea)
+        linea = linea.replace("**", "").replace("`", "")
+        linea = _CURSIVA.sub(r"\1", linea)
+        if linea.startswith("####"):
+            salida += ["", linea.lstrip("# ").upper()]
+        elif linea.startswith("###"):
+            salida += [linea.lstrip("# ").strip(), "═" * 60]
+        else:
+            salida.append(linea)
+    volcar()
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(salida)).strip() + "\n"
 
 
 def envolver(secciones: List[str]) -> str:

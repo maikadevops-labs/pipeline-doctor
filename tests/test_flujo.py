@@ -131,7 +131,7 @@ def test_flujo_con_codigo_cambiado(monkeypatch, tmp_path):
 def test_flujo_sin_run_verde(monkeypatch, tmp_path):
     cfg, gh, _ = preparar(monkeypatch, tmp_path, con_verde=False)
     diagnostico._ejecutar(cfg, gh)
-    assert "todavía no hay un run verde" in gh.comentarios[0][1]
+    assert "Todavía no hay un run verde" in gh.comentarios[0][1]
 
 
 def test_emparejar_por_nombre_y_por_unicidad():

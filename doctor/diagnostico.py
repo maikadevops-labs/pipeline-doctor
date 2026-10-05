@@ -220,7 +220,10 @@ def _ejecutar(cfg: Config, gh: Optional[GitHub] = None) -> int:
     if cfg.resumen_path:
         with open(cfg.resumen_path, "a", encoding="utf-8") as f:
             f.write(cuerpo + "\n")
-    print(cuerpo)
+    print("::group::Informe de Pipeline Doctor")
+    print(informe.texto_plano(cuerpo))
+    print("::endgroup::")
+    print("::notice title=Pipeline Doctor::Informe publicado en la pestaña Summary del run.")
 
     numero = numero_de_pr(cfg)
     if numero:
