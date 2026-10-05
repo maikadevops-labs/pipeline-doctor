@@ -13,3 +13,10 @@ def test_respuesta_sin_json():
     assert parsear_json("no tengo nada") is None
     assert parsear_json("{roto") is None
     assert parsear_json("") is None
+
+
+def test_prompt_explica_el_formato_de_descartado():
+    from doctor import prompt
+
+    assert "<causa descartada>: <razón" in prompt.SISTEMA
+    assert "Nunca pongas ahí la causa real" in prompt.SISTEMA

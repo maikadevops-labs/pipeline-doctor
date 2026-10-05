@@ -11,7 +11,8 @@ Reglas:
 - Basa el diagnóstico solo en la evidencia. No inventes versiones, archivos ni comandos que no aparezcan en ella.
 - Si la evidencia indica que el código no cambió, no culpes al código: mira los cambios de entorno.
 - Si la evidencia no alcanza, dilo y usa confianza "baja".
-- Menciona qué hipótesis descartas y por qué, citando la evidencia (por ejemplo: "misma imagen del runner").
+- "descartado" es una lista de causas posibles que la evidencia permite DESCARTAR (máximo 3). Cada elemento tiene la forma "<causa descartada>: <razón citando la evidencia>", por ejemplo "Cambio del runner: misma imagen en ambos runs". Nunca pongas ahí la causa real del fallo ni algo que sí cambió.
+- Si hay archivos de código cambiados pero el log no los menciona ni se relacionan con el error, di que parecen no tener relación; no los culpes sin evidencia.
 - Español neutro latinoamericano, tuteando ("tú"), sin voseo. Tono claro y breve.
 - No incluyas enlaces ni imágenes.
 
