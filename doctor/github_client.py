@@ -23,9 +23,16 @@ class GitHub:
             entrada = json.dumps(cuerpo)
         env = dict(os.environ)
         env["GH_TOKEN"] = self.token
-        r = ejecutar(cmd, entrada=entrada, timeout=180, env=env)
         if crudo:
-            return r.stdout
+            # Los logs traen colores ANSI y `gh` se niega a imprimirlos sin este permiso.
+            # Se limpian después (logs.limpiar). Si el `gh` es muy viejo y no conoce la opción, se reintenta sin ella.
+            try:
+                return ejecutar(cmd + ["--allow-escape-sequences"], entrada=entrada, timeout=180, env=env).stdout
+            except RuntimeError as e:
+                if "unknown flag" not in str(e):
+                    raise
+            return ejecutar(cmd, entrada=entrada, timeout=180, env=env).stdout
+        r = ejecutar(cmd, entrada=entrada, timeout=180, env=env)
         return json.loads(r.stdout) if r.stdout.strip() else None
 
     def jobs_del_run(self, run_id: str, intento: str) -> List[dict]:

@@ -145,3 +145,42 @@ def test_si_no_hay_jobs_fallidos_no_hace_nada(monkeypatch, tmp_path):
     cfg, gh, _ = preparar(monkeypatch, tmp_path)
     gh.jobs_del_run = lambda *a: [{"id": 1, "name": "test", "conclusion": "success"}]
     assert diagnostico._ejecutar(cfg, gh) == 0 and gh.comentarios == []
+
+
+def test_log_crudo_pide_permiso_para_secuencias_de_escape(monkeypatch):
+    llamadas = []
+
+    def falso(cmd, **kw):
+        llamadas.append(cmd)
+
+        class R:
+            stdout = "\x1b[31mFAILED\x1b[0m"
+
+        return R()
+
+    from doctor import github_client
+
+    monkeypatch.setattr(github_client, "ejecutar", falso)
+    texto = github_client.GitHub("o/r", "t").log_del_job(1)
+    assert "--allow-escape-sequences" in llamadas[0]
+    assert "FAILED" in texto
+
+
+def test_log_crudo_reintenta_si_gh_no_conoce_la_opcion(monkeypatch):
+    llamadas = []
+
+    def falso(cmd, **kw):
+        llamadas.append(cmd)
+        if "--allow-escape-sequences" in cmd:
+            raise RuntimeError("`gh api` terminó con código 1: unknown flag: --allow-escape-sequences")
+
+        class R:
+            stdout = "ok"
+
+        return R()
+
+    from doctor import github_client
+
+    monkeypatch.setattr(github_client, "ejecutar", falso)
+    assert github_client.GitHub("o/r", "t").log_del_job(1) == "ok"
+    assert len(llamadas) == 2
