@@ -148,7 +148,7 @@ def construir(ctx: dict, analisis: Optional[dict] = None) -> str:
     if not diagnostico:
         diagnostico = f"{principal['titulo']}. {principal['evidencia']}"
     bloques += ["#### 🩺 Diagnóstico", diagnostico]
-    descartado = [texto_ia(d, 200) for d in (analisis.get("descartado") or []) if d][:5]
+    descartado = [t for t in (texto_ia(d, 200).rstrip(" .;") for d in (analisis.get("descartado") or []) if d) if t][:5]
     if descartado:
         bloques.append("**Descartado:** " + "; ".join(descartado) + ".")
 
@@ -172,6 +172,13 @@ def construir(ctx: dict, analisis: Optional[dict] = None) -> str:
         notas.append(
             "No pude consultar el modelo (revisa permisos y el ID del modelo en el log del job); "
             "este diagnóstico sale de la comparación automática."
+        )
+    elif ctx.get("modelo"):
+        modelo = str(ctx["modelo"]).replace("`", "")[:80]
+        notas.append(
+            f"🤖 Texto redactado con IA (`{modelo}` en Amazon Bedrock) a partir de la evidencia. "
+            "La tabla de cambios sale de la comparación automática, no del modelo. "
+            "La IA puede equivocarse: verifica antes de aplicar."
         )
     if ctx.get("modelo") and ctx.get("redacciones"):
         notas.append(f"Se ocultaron {ctx['redacciones']} posible(s) secreto(s) del log antes del análisis.")

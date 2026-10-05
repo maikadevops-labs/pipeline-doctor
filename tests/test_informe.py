@@ -115,3 +115,26 @@ def test_texto_plano_para_el_log():
 def test_linea_de_error_va_en_bloque_de_codigo():
     md = informe.construir(ctx_base(linea_error="E   AttributeError: ``` raro"))
     assert md.count("```") == 2  # el bloque se abre y se cierra una sola vez
+
+
+def test_descartado_no_duplica_puntos():
+    analisis = {"descartado": ["Cambios en el código.", "Otro módulo."]}
+    md = informe.construir(ctx_base(modelo="m"), analisis)
+    assert "**Descartado:** Cambios en el código; Otro módulo." in md
+    assert ".;" not in md and ".." not in md.split("**Descartado:**")[1].splitlines()[0]
+
+
+def test_con_ia_se_aclara_que_el_texto_lo_redacto_un_modelo():
+    md = informe.construir(ctx_base(modelo="amazon.nova-lite-v1:0"), {"diagnostico": "x"})
+    assert "Texto redactado con IA (`amazon.nova-lite-v1:0` en Amazon Bedrock)" in md
+    assert "Modo sin IA" not in md
+
+
+def test_sin_ia_no_dice_que_hubo_ia():
+    md = informe.construir(ctx_base())
+    assert "redactado con IA" not in md
+
+
+def test_si_la_ia_fallo_no_dice_que_la_redacto():
+    md = informe.construir(ctx_base(modelo="m", ia_error="boom"))
+    assert "redactado con IA" not in md and "No pude consultar el modelo" in md
