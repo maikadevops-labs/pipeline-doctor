@@ -57,3 +57,14 @@ def test_no_vuelve_a_contar_lo_ya_oculto():
 def test_valor_enmascarado_por_github_no_cuenta():
     _, n = redactar_contando("token: ***")
     assert n == 0
+
+
+def test_detalle_describe_el_tipo_pero_nunca_el_valor():
+    from doctor.redact import redactar_detalle
+
+    texto = "password=hunter2 y también ghp_" + "a" * 36
+    limpio, hallazgos = redactar_detalle(texto)
+    assert any("password" in h for h in hallazgos)
+    assert "token de GitHub" in hallazgos
+    assert all("hunter2" not in h and "aaaa" not in h for h in hallazgos)
+    assert "hunter2" not in limpio

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 import os
 import sys
 from dataclasses import dataclass
@@ -152,7 +153,12 @@ def diagnosticar_job(cfg: Config, gh: GitHub, job: dict, huellas: List[dict], to
     except Exception as e:
         print(f"::warning title=Pipeline Doctor::No pude descargar el log del job: {str(e)[:200]}")
         crudo = ""
-    limpio, redacciones = redact.redactar_contando(logs.limpiar(crudo))
+    limpio, hallazgos = redact.redactar_detalle(logs.limpiar(crudo))
+    redacciones = len(hallazgos)
+    if hallazgos:
+        # Solo tipos y nombres de variables, nunca valores: sirve para detectar falsos positivos.
+        resumen_hallazgos = ", ".join(f"{t} (x{n})" for t, n in sorted(Counter(hallazgos).items()))
+        print(f"::notice title=Pipeline Doctor::Ocultado en el log antes del análisis: {resumen_hallazgos}")
     extracto = logs.extraer(limpio)
 
     huella = emparejar(job, huellas, total_fallidos)

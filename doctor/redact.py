@@ -7,7 +7,7 @@ pero no todo lo que aparece en un log es un secreto registrado.
 from __future__ import annotations
 
 import re
-from typing import Tuple
+from typing import List, Tuple
 
 REDACTADO = "[REDACTED]"
 
@@ -39,45 +39,63 @@ _ASIGNACION = re.compile(
 )
 
 
-def redactar_contando(texto: str) -> Tuple[str, int]:
-    """Devuelve (texto_limpio, cantidad_de_cosas_ocultadas)."""
-    total = 0
+_ETIQUETAS_TOKEN = [
+    "llave de acceso de AWS",
+    "token de GitHub",
+    "token fino de GitHub",
+    "token de GitLab",
+    "token de Slack",
+    "llave de API de Google",
+    "llave tipo sk-",
+    "JWT",
+]
 
-    def contar(_m):
-        nonlocal total
-        total += 1
-        return REDACTADO
 
-    texto = _BLOQUE_CLAVE_PRIVADA.sub(contar, texto)
+def redactar_detalle(texto: str) -> Tuple[str, List[str]]:
+    """Devuelve (texto_limpio, hallazgos). Los hallazgos describen el TIPO (y el nombre de la
+    variable, si la hay), nunca el valor: sirven para depurar falsos positivos sin filtrar nada."""
+    hallazgos: List[str] = []
+
+    def simple(etiqueta):
+        def _sub(_m):
+            hallazgos.append(etiqueta)
+            return REDACTADO
+
+        return _sub
+
+    texto = _BLOQUE_CLAVE_PRIVADA.sub(simple("clave privada"), texto)
 
     def url(m):
-        nonlocal total
-        total += 1
+        hallazgos.append("URL con credenciales")
         return f"{m.group(1)}{REDACTADO}@"
 
     texto = _URL_CON_CREDENCIALES.sub(url, texto)
 
     def bearer(m):
-        nonlocal total
-        total += 1
+        hallazgos.append("cabecera Bearer/Basic")
         return f"{m.group(1)} {REDACTADO}"
 
     texto = _BEARER.sub(bearer, texto)
 
-    for patron in _TOKENS:
-        texto = patron.sub(contar, texto)
+    for patron, etiqueta in zip(_TOKENS, _ETIQUETAS_TOKEN):
+        texto = patron.sub(simple(etiqueta), texto)
 
     def asignacion(m):
-        nonlocal total
         valor = m.group(3).strip("\"'")
         if valor in (REDACTADO, "***", ""):
             return m.group(0)
-        total += 1
+        hallazgos.append(f"valor de la variable '{m.group(1)[:40]}'")
         return f"{m.group(1)}{m.group(2)}{REDACTADO}"
 
     texto = _ASIGNACION.sub(asignacion, texto)
-    return texto, total
+    return texto, hallazgos
+
+
+def redactar_contando(texto: str) -> Tuple[str, int]:
+    """Devuelve (texto_limpio, cantidad_de_cosas_ocultadas)."""
+    limpio, hallazgos = redactar_detalle(texto)
+    return limpio, len(hallazgos)
 
 
 def redactar(texto: str) -> str:
-    return redactar_contando(texto)[0]
+    return redactar_detalle(texto)[0]
