@@ -126,7 +126,14 @@ data "aws_iam_policy_document" "confianza_github" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [for repo in var.github_repositories : "repo:${repo}:*"]
+      # GitHub puede incluir los IDs numéricos en el claim: repo:dueño@ID/repo@ID:ref:...
+      # Se aceptan ambos formatos, siempre del mismo dueño y repo.
+      values = flatten([
+        for repo in var.github_repositories : [
+          "repo:${repo}:*",
+          "repo:${split("/", repo)[0]}@*/${split("/", repo)[1]}@*:*",
+        ]
+      ])
     }
   }
 }
