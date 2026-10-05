@@ -1,0 +1,12 @@
+# Copia este archivo como terraform.tfvars y ajusta los valores.
+# terraform.tfvars está en .gitignore: no se sube al repositorio.
+
+region = "us-east-1"
+
+# Repositorios (dueño/repo) que podrán usar Pipeline Doctor.
+github_repositories = ["maikadevops-labs/pipeline-doctor"]
+
+# Modelos de Bedrock permitidos. Cuando sepas el ID exacto, ajústalo, por ejemplo:
+# bedrock_model_ids = ["amazon.nova-lite-v1:0"]
+# Con [] no se dan permisos de Bedrock (Pipeline Doctor funciona en modo sin IA).
+bedrock_model_ids = ["amazon.nova-*"]

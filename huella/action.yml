@@ -1,0 +1,53 @@
+name: "Pipeline Doctor: huella"
+description: "Guarda en S3 la huella del entorno de este job (runner, herramientas, dependencias) para poder compararla cuando algo falle."
+author: "Maika Esteves"
+
+inputs:
+  aws-role-arn:
+    description: "ARN del rol de AWS que Pipeline Doctor asume por OIDC (salida rol_arn de Terraform)."
+    required: true
+  bucket:
+    description: "Bucket de S3 donde se guardan las huellas (salida bucket de Terraform)."
+    required: true
+  job-status:
+    description: "Estado del job. Pasa siempre la expresión job.status del contexto de GitHub, y usa este paso con if: always()."
+    required: true
+  aws-region:
+    description: "Región de AWS."
+    required: false
+    default: "us-east-1"
+  archivos:
+    description: "Patrones glob extra (uno por línea) de archivos cuyo hash quieres vigilar."
+    required: false
+    default: ""
+  herramientas-extra:
+    description: "Herramientas extra (una por línea) con formato nombre=comando, por ejemplo: ruby=ruby --version"
+    required: false
+    default: ""
+  prefijo:
+    description: "Prefijo de las claves dentro del bucket."
+    required: false
+    default: "huellas"
+
+runs:
+  using: composite
+  steps:
+    - name: Credenciales de AWS por OIDC
+      continue-on-error: true
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: pipeline-doctor-huella
+
+    - name: Guardar huella
+      continue-on-error: true
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}/..
+        PD_BUCKET: ${{ inputs.bucket }}
+        PD_PREFIJO: ${{ inputs.prefijo }}
+        PD_JOB_STATUS: ${{ inputs.job-status }}
+        PD_ARCHIVOS: ${{ inputs.archivos }}
+        PD_HERRAMIENTAS_EXTRA: ${{ inputs.herramientas-extra }}
+      run: python3 -m doctor.huella

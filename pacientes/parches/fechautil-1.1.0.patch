@@ -1,0 +1,59 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 37caac7..10314ad 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
+ 
+ [project]
+ name = "fechautil"
+-version = "1.0.0"
++version = "1.1.0"
+ description = "Utilidades mínimas para fechas en español. Librería de laboratorio para los pacientes de Pipeline Doctor."
+ readme = "README.md"
+ requires-python = ">=3.9"
+diff --git a/src/fechautil/__init__.py b/src/fechautil/__init__.py
+index 624782a..52d2437 100644
+--- a/src/fechautil/__init__.py
++++ b/src/fechautil/__init__.py
+@@ -4,7 +4,7 @@ from __future__ import annotations
+ import re
+ from datetime import date
+ 
+-__version__ = "1.0.0"
++__version__ = "1.1.0"
+ 
+ _MESES = [
+     "enero", "febrero", "marzo", "abril", "mayo", "junio",
+@@ -12,7 +12,7 @@ _MESES = [
+ ]
+ 
+ 
+-def parse(texto: str) -> date:
++def parse_fecha(texto: str) -> date:
+     """Convierte 'AAAA-MM-DD' o 'DD/MM/AAAA' en un objeto date."""
+     texto = texto.strip()
+ 
+diff --git a/tests/test_fechautil.py b/tests/test_fechautil.py
+index 820278f..f4695e0 100644
+--- a/tests/test_fechautil.py
++++ b/tests/test_fechautil.py
+@@ -6,16 +6,16 @@ import fechautil
+ 
+ 
+ def test_parse_iso():
+-    assert fechautil.parse("2026-10-05") == date(2026, 10, 5)
++    assert fechautil.parse_fecha("2026-10-05") == date(2026, 10, 5)
+ 
+ 
+ def test_parse_latino():
+-    assert fechautil.parse("5/10/2026") == date(2026, 10, 5)
++    assert fechautil.parse_fecha("5/10/2026") == date(2026, 10, 5)
+ 
+ 
+ def test_parse_invalido():
+     with pytest.raises(ValueError):
+-        fechautil.parse("mañana")
++        fechautil.parse_fecha("mañana")
+ 
+ 
+ def test_formato_largo():

@@ -1,0 +1,52 @@
+name: "Pipeline Doctor: diagnóstico"
+description: "Cuando un job falla, compara su huella con la del último run verde y publica el diagnóstico (resumen del job y comentario en el PR)."
+author: "Maika Esteves"
+
+inputs:
+  aws-role-arn:
+    description: "ARN del rol de AWS que Pipeline Doctor asume por OIDC (salida rol_arn de Terraform)."
+    required: true
+  bucket:
+    description: "Bucket de S3 donde están las huellas (salida bucket de Terraform)."
+    required: true
+  aws-region:
+    description: "Región de AWS."
+    required: false
+    default: "us-east-1"
+  bedrock-model-id:
+    description: "ID del modelo de Bedrock que explica el diagnóstico. Vacío = modo sin IA (solo comparación automática)."
+    required: false
+    default: ""
+  bedrock-region:
+    description: "Región de Bedrock si es distinta de aws-region."
+    required: false
+    default: ""
+  github-token:
+    description: "Token para leer logs, comparar commits y comentar en el PR. Necesita actions: read, contents: read y pull-requests: write."
+    required: false
+    default: ${{ github.token }}
+  prefijo:
+    description: "Prefijo de las claves dentro del bucket (el mismo que en la acción huella)."
+    required: false
+    default: "huellas"
+
+runs:
+  using: composite
+  steps:
+    - name: Credenciales de AWS por OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: pipeline-doctor-diagnostico
+
+    - name: Consulta de Pipeline Doctor
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}/..
+        PD_BUCKET: ${{ inputs.bucket }}
+        PD_PREFIJO: ${{ inputs.prefijo }}
+        PD_MODELO: ${{ inputs.bedrock-model-id }}
+        PD_REGION_BEDROCK: ${{ inputs.bedrock-region }}
+        PD_GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: python3 -m doctor.diagnostico

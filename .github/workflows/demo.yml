@@ -1,0 +1,67 @@
+name: Demo paciente
+
+# Pipeline de ejemplo: una app mínima con tests, con Pipeline Doctor conectado.
+# Las partes de Pipeline Doctor se activan cuando existe la variable PIPELINE_DOCTOR_ROLE_ARN.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # permite entrar a AWS por OIDC, sin access keys
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r pacientes/requirements.txt
+
+      - name: Correr tests
+        working-directory: pacientes
+        run: pytest -q
+
+      # Siempre al final y con if: always(): también queremos la huella de los runs que fallan.
+      - name: Pipeline Doctor, huella
+        if: ${{ always() && vars.PIPELINE_DOCTOR_ROLE_ARN != '' }}
+        continue-on-error: true
+        uses: ./huella
+        with:
+          aws-role-arn: ${{ vars.PIPELINE_DOCTOR_ROLE_ARN }}
+          bucket: ${{ vars.PIPELINE_DOCTOR_BUCKET }}
+          job-status: ${{ job.status }}
+
+  doctor:
+    needs: [test]
+    # Solo si algo falló, Pipeline Doctor está configurado y no es un PR desde un fork
+    # (los forks no reciben token OIDC ni permisos de escritura).
+    if: >-
+      ${{ failure() && vars.PIPELINE_DOCTOR_ROLE_ARN != '' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      actions: read # leer el log del job que falló
+      contents: read # comparar commits
+      pull-requests: write # comentar en el PR
+    steps:
+      - uses: actions/checkout@v4 # necesario solo porque aquí usamos la acción local ./diagnostico
+
+      - name: Pipeline Doctor, consulta
+        uses: ./diagnostico
+        with:
+          aws-role-arn: ${{ vars.PIPELINE_DOCTOR_ROLE_ARN }}
+          bucket: ${{ vars.PIPELINE_DOCTOR_BUCKET }}
+          bedrock-model-id: ${{ vars.PIPELINE_DOCTOR_MODEL_ID }}
