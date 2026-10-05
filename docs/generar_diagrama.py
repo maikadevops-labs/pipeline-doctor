@@ -34,6 +34,15 @@ TEMAS = {
 }
 
 
+def emoji(caracter):
+    """Emoji a color como imagen (matplotlib no dibuja emojis a color como texto)."""
+    from PIL import ImageDraw, ImageFont
+    fuente = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf", 109)
+    img = Image.new("RGBA", (136, 128), (0, 0, 0, 0))
+    ImageDraw.Draw(img).text((0, 0), caracter, font=fuente, embedded_color=True)
+    return img
+
+
 def icono(clase, blanco=False):
     raiz = os.path.dirname(os.path.dirname(diagrams.__file__))
     img = Image.open(os.path.join(raiz, clase._icon_dir, clase._icon)).convert("RGBA")
@@ -45,72 +54,87 @@ def icono(clase, blanco=False):
 
 
 def dibujar(nombre: str, t: dict) -> None:
-    ancho, alto = 26.0, 11.0
-    fig = plt.figure(figsize=(ancho, alto - 0.2), dpi=100, facecolor=t["fondo"])
+    # Unidades = pulgadas. El lienzo es compacto y las letras grandes, para que se lean
+    # cuando GitHub muestra la imagen a unos 900 px de ancho.
+    ancho, alto, base = 17.3, 8.5, 0.2
+    fig = plt.figure(figsize=(ancho, alto), dpi=160, facecolor=t["fondo"])
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(0, ancho)
-    ax.set_ylim(0.2, alto)
+    ax.set_ylim(base, base + alto)
     ax.axis("off")
+    TXT, ETQ = 15, 14
 
-    def texto(x, y, s, size=13, color=None, weight="normal", ha="center", va="center_baseline"):
+    def texto(x, y, s, size=TXT, color=None, weight="normal", ha="center", va="center_baseline"):
         ax.text(x, y, s, fontsize=size, color=color or t["texto"], ha=ha, va=va, weight=weight,
-                linespacing=1.35, zorder=6)
+                linespacing=1.3, zorder=6)
 
-    def cluster(x0, y0, x1, y1, titulo, c):
-        ax.add_patch(FancyBboxPatch((x0, y0), x1 - x0, y1 - y0, boxstyle="round,pad=0,rounding_size=0.25",
-                                    fc=c["fondo"], ec=c["borde"], lw=2, zorder=1))
-        texto(x0 + 0.3, y1 - 0.38, titulo, size=14, ha="left", weight="bold", color=c["titulo"])
+    def cluster(x0, y0, x1, y1, titulo, c, emo=None):
+        ax.add_patch(FancyBboxPatch((x0, y0), x1 - x0, y1 - y0, boxstyle="round,pad=0,rounding_size=0.18",
+                                    fc=c["fondo"], ec=c["borde"], lw=2.2, zorder=1))
+        sangria = 0.25
+        if emo:
+            ax.add_artist(AnnotationBbox(OffsetImage(emoji(emo), zoom=0.17), (x0 + 0.5, y1 - 0.33),
+                                         frameon=False, zorder=6))
+            sangria = 0.8
+        texto(x0 + sangria, y1 - 0.33, titulo, ha="left", weight="bold", color=c["titulo"])
 
-    def paso(x, y, s, c, ia=False, w=2.7, h=1.2):
-        ax.add_patch(FancyBboxPatch((x - w / 2, y - h / 2), w, h, boxstyle="round,pad=0,rounding_size=0.2",
-                                    fc=t["paso"], ec=t["ia"] if ia else c["borde"], lw=2,
+    def paso(x, y, s, c, w, ia=False, h=1.0):
+        ax.add_patch(FancyBboxPatch((x - w / 2, y - h / 2), w, h, boxstyle="round,pad=0,rounding_size=0.15",
+                                    fc=t["paso"], ec=t["ia"] if ia else c["borde"], lw=2.2,
                                     ls="--" if ia else "-", zorder=3))
-        texto(x, y, s, size=13)
+        texto(x, y, s)
         return dict(x=x, y=y, w=w / 2, h=h / 2)
 
-    def nodo(x, y, clase, etiqueta, blanco=False, zoom=0.4):
+    def nodo(x, y, clase, etiqueta, blanco=False, zoom=0.3):
         img = icono(clase, blanco)
-        ax.add_artist(AnnotationBbox(OffsetImage(img, zoom=zoom), (x, y + 0.2), frameon=False, zorder=4))
-        texto(x, y - 0.65, etiqueta, size=13, va="top")
-        return dict(x=x, y=y + 0.2, w=0.75, h=0.62)
+        ax.add_artist(AnnotationBbox(OffsetImage(img, zoom=zoom * 0.72), (x, y), frameon=False, zorder=4))
+        texto(x, y - 0.5, etiqueta, va="top")
+        return dict(x=x, y=y, w=0.55, h=0.45)
 
     def flecha(a, b, lado_a, lado_b, color=None, estilo="-"):
-        """Flecha recta entre el borde de dos nodos. lado: 'r', 'l', 't', 'b'."""
         def punto(n, lado):
             dx = {"r": n["w"], "l": -n["w"]}.get(lado, 0)
             dy = {"t": n["h"], "b": -n["h"]}.get(lado, 0)
             return n["x"] + dx, n["y"] + dy
         (x0, y0), (x1, y1) = punto(a, lado_a), punto(b, lado_b)
-        ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle="-|>", mutation_scale=18,
-                                     color=color or t["suave"], lw=2, ls=estilo, shrinkA=4, shrinkB=4, zorder=2))
+        ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle="-|>", mutation_scale=20,
+                                     color=color or t["suave"], lw=2.2, ls=estilo, shrinkA=3, shrinkB=3, zorder=2))
         return (x0 + x1) / 2, (y0 + y1) / 2
 
     def insignia(x, y, n, color):
-        ax.add_patch(Circle((x, y), 0.27, fc=color, ec=t["fondo"], lw=2, zorder=7))
-        ax.text(x, y - 0.01, str(n), fontsize=15, color=t["fondo"] if t["github_blanco"] else "#FFFFFF", ha="center", va="center", weight="bold",
-                zorder=8)
+        ax.add_patch(Circle((x, y), 0.3, fc=color, ec=t["fondo"], lw=2, zorder=7))
+        ax.text(x, y - 0.01, str(n), fontsize=17, color=t["fondo"] if t["github_blanco"] else "#FFFFFF",
+                ha="center", va="center", weight="bold", zorder=8)
 
-    texto(ancho / 2, alto - 0.55, "Tu código no cambió. Cambió esto.", size=24, weight="bold")
+    def etiqueta_h(x, y, n, s, color):
+        insignia(x, y, n, color)
+        texto(x, y + 0.85, s, size=ETQ, color=color)
 
-    yA, yB = 8.2, 3.9  # fila del job test y fila del job doctor
-    xS3 = 15.2         # S3 y "Comparar" comparten columna: la flecha 2 baja derecha
+    def etiqueta_v(x, y, n, s, color):
+        insignia(x, y, n, color)
+        texto(x + 0.5, y, s, size=ETQ, color=color, ha="left")
 
-    cluster(2.2, yA - 1.5, 8.9, yA + 1.5, "Job 1 · test", t["test"])
-    cluster(9.9, yB - 1.35, 22.7, yB + 1.45, "Job 2 · doctor (solo si el job 1 falla)", t["doctor"])
-    cluster(10.9, yA - 2.05, 20.0, yA + 1.5, "AWS Cloud · tu cuenta de AWS", t["aws"])
-    push = nodo(1.0, yA - 0.2, Github, "push o PR", blanco=t["github_blanco"], zoom=0.34)
-    instalar = paso(3.7, yA, "Instalar y\nprobar tu app", t["test"], w=2.5)
-    huella = paso(7.0, yA, "Acción huella\n(siempre, aunque falle)", t["test"], w=3.2)
-    rol = nodo(11.8, yA - 0.2, IAMRole, "Rol por OIDC\nsin access keys")
-    s3 = nodo(xS3, yA - 0.2, S3, "S3 privado\nhuellas y último\nrun exitoso")
+    yA, yB = 6.6, 3.0
+    xS3, xRol = 9.4, 7.5
+    texto(ancho / 2, base + alto - 0.4, "Tu código no cambió. Cambió esto.", size=22, weight="bold")
 
-    leer = paso(11.5, yB, "Leer el log y\nocultar secretos", t["doctor"], w=2.6)
-    comparar = paso(xS3, yB, "Comparar con el\núltimo run exitoso", t["doctor"], w=2.8)
-    redactar = paso(18.6, yB, "Redactar el informe\ncon IA (opcional)", t["doctor"], ia=True, w=3.0)
-    publicar = paso(21.4, yB, "Publicar\nel informe", t["doctor"], w=2.1)
-    informe = nodo(24.5, yB - 0.2, Github, "Summary del run\ny comentario del PR",
-                   blanco=t["github_blanco"], zoom=0.34)
-    bedrock = nodo(18.6, yA - 0.2, Bedrock, "Amazon Bedrock", zoom=0.34)
+    # Fila A: push -> Job 1 -> AWS
+    cluster(1.5, yA - 0.8, 5.45, yA + 1.1, "Job 1 · test", t["test"], "🧪")
+    cluster(6.6, yA - 1.55, 12.95, yA + 1.1, "AWS Cloud · tu cuenta de AWS", t["aws"], "☁️")
+    push = nodo(0.7, yA, Github, "push o PR", blanco=t["github_blanco"], zoom=0.26)
+    instalar = paso(2.6, yA, "Instalar y\nprobar app", t["test"], 1.6)
+    huella = paso(4.5, yA, "Acción\nhuella", t["test"], 1.4)
+    rol = nodo(xRol, yA, IAMRole, "Rol por OIDC\nsin access keys")
+    s3 = nodo(xS3, yA, S3, "S3 privado\nhuellas y último\nrun exitoso")
+    bedrock = nodo(11.9, yA, Bedrock, "Amazon\nBedrock")
+
+    # Fila B: Job 2
+    cluster(5.6, yB - 0.8, 14.85, yB + 1.05, "Job 2 · doctor", t["doctor"], "🩺")
+    leer = paso(6.9, yB - 0.1, "Leer log y\nocultar secretos", t["doctor"], 1.9)
+    comparar = paso(xS3, yB - 0.1, "Comparar con\núltimo run exitoso", t["doctor"], 2.2)
+    redactar = paso(11.9, yB - 0.1, "Redactar con IA\n(opcional)", t["doctor"], 1.9, ia=True)
+    publicar = paso(13.95, yB - 0.1, "Publicar\ninforme", t["doctor"], 1.4)
+    informe = nodo(16.5, yB - 0.1, Github, "Summary\ny comentario\ndel PR", blanco=t["github_blanco"], zoom=0.26)
 
     flecha(push, instalar, "r", "l")
     flecha(instalar, huella, "r", "l")
@@ -119,48 +143,33 @@ def dibujar(nombre: str, t: dict) -> None:
     flecha(comparar, redactar, "r", "l")
     flecha(redactar, publicar, "r", "l")
 
-    def etiqueta_h(x, y, n, s, color):
-        """Flecha horizontal numerada: la insignia va sobre la línea y el texto, centrado, arriba."""
-        insignia(x, y, n, color)
-        texto(x, y + 0.6, s, size=13, color=color, va="center_baseline")
-
-    def etiqueta_v(x, y, n, s, color):
-        """Flecha vertical numerada: la insignia va sobre la línea y el texto, a la derecha."""
-        insignia(x, y, n, color)
-        texto(x + 0.5, y, s, size=13, color=color, ha="left", va="center_baseline")
-
-    # Paso 1: Acción huella -> rol
     x, y = flecha(huella, rol, "r", "l", color=t["azul"])
-    etiqueta_h(x, y, 1, "guarda la huella", t["azul"])
+    etiqueta_h(6.05, y, 1, "guarda\nla huella", t["azul"])
 
-    # Paso 2: S3 -> Comparar (vertical, empieza bajo la etiqueta de S3)
-    origen = dict(x=xS3, y=yA - 2.05, w=0, h=0)
-    x, y = flecha(origen, comparar, "b", "t", color=t["azul"])
-    etiqueta_v(x, 5.75, 2, "último run exitoso", t["azul"])
+    origen = dict(x=xS3, y=yA - 1.55, w=0, h=0)
+    flecha(origen, comparar, "b", "t", color=t["azul"])
+    etiqueta_v(xS3, 4.55, 2, "último run\nexitoso", t["azul"])
 
-    # Paso 3: Redactar -> Bedrock (vertical)
-    destino = dict(x=18.6, y=yA - 1.25, w=0, h=0)
-    x, y = flecha(redactar, destino, "t", "b", color=t["ia"], estilo="--")
-    etiqueta_v(x, 5.75, 3, "consulta (logs sin secretos)", t["ia"])
+    destino = dict(x=11.9, y=yA - 1.3, w=0, h=0)
+    flecha(redactar, destino, "t", "b", color=t["ia"], estilo="--")
+    etiqueta_v(11.9, 4.55, 3, "consulta\n(sin secretos)", t["ia"])
 
-    # Paso 4: Publicar -> informe
     x, y = flecha(publicar, informe, "r", "l", color=t["ok"])
     etiqueta_h(x, y, 4, "publica", t["ok"])
 
-    # Conexión entre los dos jobs: son parte del mismo workflow (needs: test, if: failure())
-    xc, y0, y1 = 5.5, yA - 1.5, yB
-    ax.plot([xc, xc], [y0, y1], color=t["suave"], lw=2, zorder=2)
-    ax.add_patch(FancyArrowPatch((xc, y1), (9.85, y1), arrowstyle="-|>", mutation_scale=18, color=t["suave"],
-                                 lw=2, shrinkA=0, shrinkB=0, zorder=2))
-    ax.add_patch(FancyBboxPatch((xc - 1.55, (y0 + y1) / 2 - 0.5), 3.1, 1.0,
-                                boxstyle="round,pad=0,rounding_size=0.2", fc=t["fondo"], ec=t["suave"], lw=1.5,
+    # Conexión entre jobs: mismo workflow (needs: test, if: failure())
+    xc, y0, y1 = 3.5, yA - 0.8, yB - 0.1
+    ax.plot([xc, xc], [y0, y1], color=t["suave"], lw=2.2, zorder=2)
+    ax.add_patch(FancyArrowPatch((xc, y1), (5.55, y1), arrowstyle="-|>", mutation_scale=20, color=t["suave"],
+                                 lw=2.2, shrinkA=0, shrinkB=0, zorder=2))
+    ax.add_patch(FancyBboxPatch((xc - 1.05, (y0 + y1) / 2 - 0.4), 2.1, 0.8,
+                                boxstyle="round,pad=0,rounding_size=0.15", fc=t["fondo"], ec=t["suave"], lw=1.6,
                                 zorder=5))
-    texto(xc, (y0 + y1) / 2, "needs: test\nif: failure()", size=12, color=t["suave"])
-    texto(1.0, 0.9, "Los dos jobs son parte del mismo workflow de GitHub Actions.", size=13,
-          color=t["suave"], ha="left")
+    texto(xc, (y0 + y1) / 2, "needs: test\nif: failure()", size=13, color=t["suave"])
 
-    # Nota en el hueco de la izquierda
-    texto(1.0, 1.9, "Todo es código determinístico,\nsalvo el paso 3 (IA, opcional).", size=13,
+    texto(0.6, 1.45, "Todo es código determinístico,\nsalvo el paso 3 (IA, opcional).", size=13,
+          color=t["suave"], ha="left")
+    texto(0.6, 0.65, "Los dos jobs son parte del mismo\nworkflow de GitHub Actions.", size=13,
           color=t["suave"], ha="left")
 
     fig.savefig(f"arquitectura-{nombre}.png", facecolor=t["fondo"])
