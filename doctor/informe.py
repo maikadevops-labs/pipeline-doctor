@@ -89,6 +89,25 @@ def frase_codigo(codigo: Optional[dict], verde_n, actual_n) -> str:
 # --- informe de un job -------------------------------------------------------------------
 
 
+_SIN_CAMBIO = {
+    "runner": "Cambio del runner: misma imagen en ambos runs",
+    "herramientas": "Cambio de herramientas: mismas versiones de Python, pip y demás",
+    "dependencias": "Cambio de dependencias: mismas versiones",
+    "referencias": "Cambio del origen de las dependencias: mismos commits",
+    "archivos": "Cambio en archivos de dependencias o de workflows: mismo contenido",
+}
+
+
+def descartes(diff: Optional[Dict], codigo: Optional[dict]) -> List[str]:
+    """Causas que la comparación automática permite descartar con certeza (no las decide el modelo)."""
+    lista: List[str] = []
+    if codigo is not None and (codigo.get("identico") or codigo.get("archivos") == []):
+        lista.append("Cambio de código: mismo commit")
+    if diff is not None:
+        lista += [texto for categoria, texto in _SIN_CAMBIO.items() if not diff.get(categoria)]
+    return lista
+
+
 def _bloque(texto: str) -> str:
     """Bloque de código para una línea del log (sin permitir que cierre el bloque)."""
     return "```text\n" + texto.replace("```", "'''") + "\n```"
@@ -148,9 +167,13 @@ def construir(ctx: dict, analisis: Optional[dict] = None) -> str:
     if not diagnostico:
         diagnostico = f"{principal['titulo']}. {principal['evidencia']}"
     bloques += ["#### 🩺 Diagnóstico", diagnostico]
-    descartado = [t for t in (texto_ia(d, 200).rstrip(" .;") for d in (analisis.get("descartado") or []) if d) if t][:5]
+    # Los descartes salen de la comparación automática cuando existe; el modelo solo es el respaldo.
+    if verde and ctx.get("diff") is not None:
+        descartado = descartes(ctx.get("diff"), ctx.get("codigo"))[:5]
+    else:
+        descartado = [t for t in (texto_ia(d, 200).rstrip(" .;") for d in (analisis.get("descartado") or []) if d) if t][:5]
     if descartado:
-        bloques.append("**Descartado:** " + "; ".join(descartado) + ".")
+        bloques.append("**Descartado:**\n\n" + "\n".join(f"- {d}" for d in descartado))
 
     # Tratamiento y validación
     bloques += [
@@ -229,6 +252,8 @@ def texto_plano(md: str) -> str:
         if linea.strip() == "---":
             salida.append("─" * 60)
             continue
+        if linea.startswith("- "):
+            linea = "  • " + linea[2:]
         linea = _ENLACE_MD.sub(r"\1: \2", linea)
         linea = re.sub(r"</?sub>", "", linea)
         linea = linea.replace("**", "").replace("`", "")

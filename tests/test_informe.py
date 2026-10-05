@@ -59,7 +59,10 @@ def test_informe_usa_el_analisis_del_modelo_y_lo_sanea():
     md = informe.construir(ctx_base(modelo="amazon.nova-lite-v1:0"), analisis)
     assert "evil.example" not in md and "otra.url" not in md
     assert "@alguien" not in md  # la mención queda neutralizada
-    assert "**Descartado:** runner: misma imagen." in md
+    # con comparación disponible, los descartes los pone el código, no el modelo
+    assert "Cambio del runner: misma imagen en ambos runs" in md
+    assert "Cambio de código: mismo commit" in md
+    assert "runner: misma imagen." not in md
     assert "**Confianza:** alta" in md
     assert "Modo sin IA" not in md
 
@@ -119,8 +122,8 @@ def test_linea_de_error_va_en_bloque_de_codigo():
 
 def test_descartado_no_duplica_puntos():
     analisis = {"descartado": ["Cambios en el código.", "Otro módulo."]}
-    md = informe.construir(ctx_base(modelo="m"), analisis)
-    assert "**Descartado:** Cambios en el código; Otro módulo." in md
+    md = informe.construir(ctx_base(verde=None, diff=None, codigo=None, modelo="m"), analisis)
+    assert "**Descartado:**\n\n- Cambios en el código\n- Otro módulo\n" in md + "\n"
     assert ".;" not in md and ".." not in md.split("**Descartado:**")[1].splitlines()[0]
 
 
@@ -138,3 +141,22 @@ def test_sin_ia_no_dice_que_hubo_ia():
 def test_si_la_ia_fallo_no_dice_que_la_redacto():
     md = informe.construir(ctx_base(modelo="m", ia_error="boom"))
     assert "redactado con IA" not in md and "No pude consultar el modelo" in md
+
+
+def test_descartes_nunca_incluyen_lo_que_si_cambio():
+    md = informe.construir(ctx_base())
+    linea = md.split("**Descartado:**")[1].split("####")[0].split("---")[0]
+    assert "Cambio de dependencias" not in linea  # fechautil sí cambió
+    assert "Cambio del origen de las dependencias" not in linea  # su commit también
+
+
+def test_sin_comparacion_se_usa_el_descartado_del_modelo():
+    md = informe.construir(ctx_base(verde=None, diff=None, codigo=None, modelo="m"), {"descartado": ["Red: sin cambios."]})
+    assert "**Descartado:**\n\n- Red: sin cambios" in md
+
+
+def test_descartado_va_en_lista_y_el_log_la_muestra_con_vinetas():
+    md = informe.construir(ctx_base())
+    assert "**Descartado:**\n\n- Cambio de código: mismo commit\n- Cambio del runner" in md
+    plano = informe.texto_plano(md)
+    assert "  • Cambio del runner: misma imagen en ambos runs" in plano
