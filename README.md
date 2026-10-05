@@ -8,35 +8,12 @@ Hoy existen asistentes que leen el log de un job fallido y proponen un arreglo. 
 
 ## Cómo funciona
 
-```mermaid
-flowchart LR
-  subgraph T["Job test"]
-    direction TB
-    A["Tus pasos<br/>instalar y probar"] --> B["Paso huella<br/><i>if: always()</i>"]
-  end
-
-  S[("Amazon S3<br/>huellas privadas")]
-
-  subgraph D["Job doctor (solo si algo falla)"]
-    direction TB
-    C["1. Baja la huella de este run<br/>y la del último verde"] --> E["2. Compara runner, herramientas,<br/>dependencias, archivos y código"]
-    E --> F["3. Limpia secretos del log"]
-    F --> G["4. Bedrock redacta (opcional)"]
-    G --> H["5. Informe: resumen del job<br/>y comentario en el PR"]
-  end
-
-  T -- "OIDC, sin<br/>access keys" --> S
-  S -- "OIDC, sin<br/>access keys" --> D
-
-  classDef codigo fill:#e8f1ff,stroke:#2f6fdd,color:#10294d
-  classDef ia fill:#f3e9ff,stroke:#8a4fd8,color:#2d1550,stroke-dasharray:5 4
-  classDef nube fill:#fff4e0,stroke:#e08a00,color:#4d2f00
-  class A,B,C,E,F,H codigo
-  class G ia
-  class S nube
-```
-
-En azul, lo que hace código determinístico. En violeta punteado, el único paso que usa un modelo, y es opcional.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/arquitectura-oscuro.png">
+    <img alt="Arquitectura de Pipeline Doctor: el job test guarda la huella del entorno en S3 por OIDC; si algo falla, el job doctor compara las huellas, limpia secretos del log, opcionalmente pide a Bedrock que redacte y publica el informe en el resumen del run y en el PR." src="docs/arquitectura-claro.png" width="900">
+  </picture>
+</p>
 
 **La comparación y los descartes los hace código determinístico, no un modelo.** Bedrock, si lo activas, solo redacta la explicación en lenguaje humano a partir de esa evidencia. Si no lo configuras, Pipeline Doctor igual te entrega el informe con la comparación.
 
