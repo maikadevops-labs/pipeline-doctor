@@ -7,7 +7,7 @@ import fechautil
 def dias_para(fecha_texto: str, hoy: date) -> int:
     """Cuántos días faltan para una fecha (negativo si ya pasó)."""
     objetivo = fechautil.parse(fecha_texto)
-    return (objetivo - hoy).days
+    return (hoy - objetivo).days
 
 
 def describir(fecha_texto: str) -> str:
